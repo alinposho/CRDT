@@ -13,7 +13,7 @@ class Node extends Actor with ActorLogging {
       state(pos) += 1
       siblings foreach (actor => actor ! Merge(state.toSeq))
       log.info(s"Received Inc($pos). New state=$printState")
-    case Get => sender ! state.toSeq
+    case Get => sender ! state.toVector
     case Merge(seq) =>
       log.info(s"Received merge request with content=$seq")
       for (i <- state.indices) {
@@ -23,10 +23,10 @@ class Node extends Actor with ActorLogging {
     case Siblings(newSiblings) =>
       log.info(s"Received new siblings list $newSiblings")
       siblings = newSiblings
-
+      siblings foreach(a => a ! Merge(state.toSeq))
   }
 
-  def printState() = state.mkString(",")
+  def printState = state.mkString(",")
 
 
 }

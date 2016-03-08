@@ -3,7 +3,7 @@ package crdt.sample
 import akka.actor.ActorRef
 
 package object counter {
-  val VectorSize = 5
+  val VectorSize = 3
 }
 
 case class Inc(position: Int)
