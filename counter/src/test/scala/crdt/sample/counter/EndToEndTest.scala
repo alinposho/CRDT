@@ -7,9 +7,6 @@ import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
 import scala.concurrent.duration._
 
-/**
-  * These tests might not work on IntelliJ since they are not meant to be run in parallel.
-  */
 class EndToEndTest extends TestKit(ActorSystem("EndToEndTest"))
   with ImplicitSender
   with WordSpecLike
@@ -24,13 +21,12 @@ class EndToEndTest extends TestKit(ActorSystem("EndToEndTest"))
     "synchronize their state after the updates" in {
       withMasterActor { master =>
         // Prepare
-        master ! GetTopology
-        val Vector(nodes) = receiveOne(5.seconds).asInstanceOf[Vector[Vector[ActorRef]]]
+        val Vector(nodes) = getTopology(master)
         val expectedConvergedVectorValue = (0 until counter.VectorSize map (_ => 1)).toVector
 
         // Exercise
         for (i <- 0 until counter.VectorSize) {
-          nodes foreach { actor => actor ! Inc(i) }
+          nodes(i) ! Inc(i)
         }
 
         // Verify
@@ -40,13 +36,9 @@ class EndToEndTest extends TestKit(ActorSystem("EndToEndTest"))
 
     "notice divergent values during a partition" in {
       withMasterActor { master =>
-        master ! GetTopology
-        val Vector(initialTopology) = receiveOne(5.seconds).asInstanceOf[Vector[Vector[ActorRef]]]
 
         // Exercise
-        val (partition1, partition2) = initialTopology.splitAt(2)
-        master ! SetTopology(Vector(partition1, partition2))
-        expectNoMsg(1.second)
+        val (partition1, partition2) = partitionTopologyAt(index = 2, master)
 
         partition1(0) ! Inc(1) // This update should be experienced only in partition 1
 
@@ -56,6 +48,45 @@ class EndToEndTest extends TestKit(ActorSystem("EndToEndTest"))
       }
     }
 
+    "merge the state after the partion is healed" in {
+      withMasterActor { master =>
+        // Prepare
+        val initialTopology = getTopology(master)
+        val (partition1, partition2) = partitionTopologyAt(index = 2, master)
+
+        // Exercise
+
+        partition1(0) ! Inc(1) // This update should be experienced only in partition 1
+        partition1(0) ! Inc(2)
+        partition2(0) ! Inc(2);
+        partition2(0) ! Inc(2) // This update should be experienced by the second partition
+
+        // Verify states have diverged
+        assertStateIs(expectedState = Vector(0, 1, 1), partition1)
+        assertStateIs(expectedState = Vector(0, 0, 2), partition2)
+
+        // heal network
+        master ! SetTopology(initialTopology)
+        val newTopology = getTopology(master)
+        assert(initialTopology === newTopology)
+
+
+        val mergeState = Vector(0, 1, 2) // Notice that for the last element we picked the max, i.e. 2
+        assertStateIs(expectedState = mergeState, partition1)
+        assertStateIs(expectedState = mergeState, partition2)
+      }
+    }
+
+  }
+
+  def setInitialState(actors: Vector[ActorRef]): Vector[Int] = {
+    for (i <- 0 until counter.VectorSize) {
+      actors(i) ! Inc(i)
+    }
+    val initialState: Vector[Int] = Vector(1, 1, 1)
+    assertStateIs(expectedState = initialState, actors = actors)
+
+    initialState
   }
 
   def withMasterActor(body: ActorRef => Unit): Unit = {
@@ -65,6 +96,21 @@ class EndToEndTest extends TestKit(ActorSystem("EndToEndTest"))
     } finally {
       system.stop(actor)
     }
+  }
+
+  def getTopology(master: ActorRef): Vector[Vector[ActorRef]] = {
+    master ! GetTopology
+    val topology = receiveOne(5.seconds).asInstanceOf[Vector[Vector[ActorRef]]]
+    topology
+  }
+
+  def partitionTopologyAt(index: Int, master: ActorRef): (Vector[ActorRef], Vector[ActorRef]) = {
+    val Vector(initialTopology) = getTopology(master)
+    val (partition1, partition2) = initialTopology.splitAt(2)
+    master ! SetTopology(Vector(partition1, partition2))
+    assert(getTopology(master) === Vector(partition1, partition2))
+
+    (partition1, partition2)
   }
 
   def assertStateIs(expectedState: Seq[Int], actors: Seq[ActorRef]): Unit = {
