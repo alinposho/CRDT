@@ -1,9 +1,9 @@
 name := "counter"
-
 version := "1.0"
  
 scalaVersion := "2.11.7"
 
+parallelExecution in Test := false
 EclipseKeys.withSource := true
  
 resolvers ++= Seq(
@@ -11,6 +11,7 @@ resolvers ++= Seq(
 )
 
 libraryDependencies ++= Seq(
+  "org.scalatest" % "scalatest_2.11" % "2.2.6" % "test",
   "com.typesafe.akka" %% "akka-testkit" % "2.3.14",
   "com.typesafe.akka" %% "akka-actor" % "2.3.14"
 )

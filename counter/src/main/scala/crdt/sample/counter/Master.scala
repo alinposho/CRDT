@@ -13,6 +13,12 @@ class Master(vectorSize: Int) extends Actor with ActorLogging {
     partitions = Vector(partition1)
   }
 
+  override def postStop(): Unit = {
+    for (actor <- context.children) {
+      context.stop(actor)
+    }
+  }
+
   override def receive: Receive = {
     case GetTopology => sender ! partitions
     case SetTopology(newPartitions: Vector[Vector[ActorRef]]) =>

@@ -26,7 +26,7 @@ class Node extends Actor with ActorLogging {
       siblings foreach(a => a ! Merge(state.toSeq))
   }
 
-  def printState = state.mkString(",")
+  def printState = state.mkString("(", ",", ")")
 
 
 }
