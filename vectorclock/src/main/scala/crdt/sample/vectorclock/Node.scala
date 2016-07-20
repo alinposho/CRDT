@@ -3,9 +3,10 @@ package crdt.sample.vectorclock
 import akka.actor.{Actor, ActorLogging, ActorRef}
 import crdt.sample.{Get, Inc, Merge, Siblings}
 
-class Node(val index: Int) extends Actor with ActorLogging {
+/** The index is 0 based. */
+class Node(val index: Int, val vectorSize: Int) extends Actor with ActorLogging {
 
-  var state: Seq[Int] = (0 until VectorSize) map (_ => 0)
+  var state: Seq[Int] = (0 until vectorSize) map (_ => 0)
   var siblings = Seq.empty[ActorRef]
 
   def receive = {

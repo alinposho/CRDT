@@ -8,7 +8,7 @@ class Master(vectorSize: Int) extends Actor with ActorLogging {
   var partitions = Vector.empty[Vector[ActorRef]]
 
   override def preStart(): Unit = {
-    val partition1 = (for (i <- 0 to vectorSize) yield context.actorOf(Props(classOf[Node], i), s"Node$i")).toVector
+    val partition1 = (for (i <- 0 until vectorSize) yield context.actorOf(Props(classOf[Node], i, vectorSize), s"Node$i")).toVector
     partition1 foreach (a => a ! Siblings(partition1.filter(_ != a)))
     partitions = Vector(partition1)
   }

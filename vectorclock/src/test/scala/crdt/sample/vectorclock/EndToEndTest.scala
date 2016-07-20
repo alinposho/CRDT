@@ -13,6 +13,8 @@ class EndToEndTest extends TestKit(ActorSystem("EndToEndTest"))
   with Matchers
   with BeforeAndAfterAll {
 
+  val VectorSize = 3
+
   override def afterAll {
     TestKit.shutdownActorSystem(system)
   }
@@ -22,10 +24,10 @@ class EndToEndTest extends TestKit(ActorSystem("EndToEndTest"))
       withMasterActor { master =>
         // Prepare
         val Vector(nodes) = getTopology(master)
-        val expectedConvergedVectorValue = (0 until vectorclock.VectorSize map (_ => 1)).toVector
+        val expectedConvergedVectorValue = (0 until VectorSize map (_ => 1)).toVector
 
         // Exercise
-        for (i <- 0 until vectorclock.VectorSize) {
+        for (i <- 0 until VectorSize) {
           nodes(i) ! Inc
         }
 
@@ -40,7 +42,7 @@ class EndToEndTest extends TestKit(ActorSystem("EndToEndTest"))
         // Exercise
         val (partition1, partition2) = partitionTopologyAt(index = 2, master)
 
-        partition1(0) ! Inc // This update should be experienced only in partition 1
+        partition1(1) ! Inc // This update should be experienced only in partition 1
 
         // Verify
         assertStateIs(expectedState = Vector(0, 1, 0), partition1)
@@ -57,12 +59,12 @@ class EndToEndTest extends TestKit(ActorSystem("EndToEndTest"))
         // Exercise
 
         partition1(0) ! Inc // This update should be experienced only in partition 1
-        partition1(0) ! Inc
+        partition1(1) ! Inc
         partition2(0) ! Inc
         partition2(0) ! Inc // This update should be experienced by the second partition
 
         // Verify states have diverged
-        assertStateIs(expectedState = Vector(0, 1, 1), partition1)
+        assertStateIs(expectedState = Vector(1, 1, 0), partition1)
         assertStateIs(expectedState = Vector(0, 0, 2), partition2)
 
         // heal network
@@ -71,7 +73,7 @@ class EndToEndTest extends TestKit(ActorSystem("EndToEndTest"))
         assert(initialTopology === newTopology)
 
 
-        val mergeState = Vector(0, 1, 2) // Notice that for the last element we picked the max, i.e. 2
+        val mergeState = Vector(1, 1, 2) // Notice that for the last element we picked the max, i.e. 2
         assertStateIs(expectedState = mergeState, partition1)
         assertStateIs(expectedState = mergeState, partition2)
       }
@@ -80,7 +82,7 @@ class EndToEndTest extends TestKit(ActorSystem("EndToEndTest"))
   }
 
   def setInitialState(actors: Vector[ActorRef]): Vector[Int] = {
-    for (i <- 0 until vectorclock.VectorSize) {
+    for (i <- 0 until VectorSize) {
       actors(i) ! Inc
     }
     val initialState: Vector[Int] = Vector(1, 1, 1)
@@ -90,7 +92,7 @@ class EndToEndTest extends TestKit(ActorSystem("EndToEndTest"))
   }
 
   def withMasterActor(body: ActorRef => Unit): Unit = {
-    val actor = system.actorOf(Props(classOf[Master], vectorclock.VectorSize))
+    val actor = system.actorOf(Props(classOf[Master], VectorSize))
     try {
       body(actor)
     } finally {
